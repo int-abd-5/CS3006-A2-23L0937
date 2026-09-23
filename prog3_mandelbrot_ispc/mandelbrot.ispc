@@ -23,8 +23,8 @@ export void mandelbrot_ispc(uniform float x0, uniform float y0,
                             uniform int maxIterations,
                             uniform int output[])
 {
-    float dx = (x1 - x0) / width;
-    float dy = (y1 - y0) / height;
+    uniform float dx = (x1 - x0) / width;
+    uniform float dy = (y1 - y0) / height;
 
     foreach (j = 0 ... height, i = 0 ... width) {
             float x = x0 + i * dx;
