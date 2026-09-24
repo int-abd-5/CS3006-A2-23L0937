@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <algorithm>
+#include <cstring>
 #include <pthread.h>
 #include <math.h>
 
@@ -18,7 +19,22 @@ static void verifyResult(int N, float* result, float* gold) {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
+
+    const char* inputCase = "random";
+    if (argc == 3 && strcmp(argv[1], "--case") == 0) {
+        inputCase = argv[2];
+    } else if (argc != 1) {
+        fprintf(stderr, "Usage: %s [--case random|best|worst]\n", argv[0]);
+        return 1;
+    }
+
+    if (strcmp(inputCase, "random") != 0 &&
+        strcmp(inputCase, "best") != 0 &&
+        strcmp(inputCase, "worst") != 0) {
+        fprintf(stderr, "Usage: %s [--case random|best|worst]\n", argv[0]);
+        return 1;
+    }
 
     const unsigned int N = 20 * 1000 * 1000;
     const float initialGuess = 1.0f;
@@ -29,24 +45,27 @@ int main() {
 
     for (unsigned int i=0; i<N; i++)
     {
-        // TODO: CS149 students.  Attempt to change the values in the
-        // array here to meet the instructions in the handout: we want
-        // to you generate best and worse-case speedups
-        
-        // starter code populates array with random input values
-        values[i] = .001f + 2.998f * static_cast<float>(rand()) / RAND_MAX;
+        if (strcmp(inputCase, "best") == 0) {
+            values[i] = 1.0f;
+        } else if (strcmp(inputCase, "worst") == 0) {
+            values[i] = (i % 2 == 0) ? 0.001f : 2.999f;
+        } else {
+            values[i] = .001f + 2.998f * static_cast<float>(rand()) / RAND_MAX;
+        }
     }
+
+    printf("[sqrt input case]:\t%s\n", inputCase);
 
     // generate a gold version to check results
     for (unsigned int i=0; i<N; i++)
         gold[i] = sqrt(values[i]);
 
     //
-    // And run the serial implementation 3 times, again reporting the
+    // And run the serial implementation 5 times, again reporting the
     // minimum time.
     //
     double minSerial = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
         sqrtSerial(N, initialGuess, values, output);
         double endTime = CycleTimer::currentSeconds();
@@ -59,10 +78,10 @@ int main() {
 
     //
     // Compute the image using the ispc implementation; report the minimum
-    // time of three runs.
+    // time of five runs.
     //
     double minISPC = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
         sqrt_ispc(N, initialGuess, values, output);
         double endTime = CycleTimer::currentSeconds();
@@ -81,7 +100,7 @@ int main() {
     // Tasking version of the ISPC code
     //
     double minTaskISPC = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
         sqrt_ispc_withtasks(N, initialGuess, values, output);
         double endTime = CycleTimer::currentSeconds();
