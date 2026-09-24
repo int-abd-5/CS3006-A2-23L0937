@@ -54,27 +54,27 @@ int main() {
     }
 
     //
-    // Run the serial implementation. Repeat three times for robust
+    // Run the serial implementation. Repeat five times for robust
     // timing.
     //
     double minSerial = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime =CycleTimer::currentSeconds();
         saxpySerial(N, scale, arrayX, arrayY, resultSerial);
         double endTime = CycleTimer::currentSeconds();
         minSerial = std::min(minSerial, endTime - startTime);
     }
 
-// printf("[saxpy serial]:\t\t[%.3f] ms\t[%.3f] GB/s\t[%.3f] GFLOPS\n",
-    //       minSerial * 1000,
-    //       toBW(TOTAL_BYTES, minSerial),
-    //       toGFLOPS(TOTAL_FLOPS, minSerial));
+    printf("[saxpy serial]:\t\t[%.3f] ms\t[%.3f] GB/s\t[%.3f] GFLOPS\n",
+           minSerial * 1000,
+           toBW(TOTAL_BYTES, minSerial),
+           toGFLOPS(TOTAL_FLOPS, minSerial));
 
     //
     // Run the ISPC (single core) implementation
     //
     double minISPC = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
         saxpy_ispc(N, scale, arrayX, arrayY, resultISPC);
         double endTime = CycleTimer::currentSeconds();
@@ -92,7 +92,7 @@ int main() {
     // Run the ISPC (multi-core) implementation
     //
     double minTaskISPC = 1e30;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
         saxpy_ispc_withtasks(N, scale, arrayX, arrayY, resultTasks);
         double endTime = CycleTimer::currentSeconds();
@@ -107,8 +107,8 @@ int main() {
            toGFLOPS(TOTAL_FLOPS, minTaskISPC));
 
     printf("\t\t\t\t(%.2fx speedup from use of tasks)\n", minISPC/minTaskISPC);
-    //printf("\t\t\t\t(%.2fx speedup from ISPC)\n", minSerial/minISPC);
-    //printf("\t\t\t\t(%.2fx speedup from task ISPC)\n", minSerial/minTaskISPC);
+    printf("\t\t\t\t(%.2fx speedup from ISPC)\n", minSerial/minISPC);
+    printf("\t\t\t\t(%.2fx speedup from task ISPC)\n", minSerial/minTaskISPC);
 
     delete[] arrayX;
     delete[] arrayY;
