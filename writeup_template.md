@@ -90,3 +90,18 @@ Narrative: “I measured … which suggested … I tried … resulting in … .�
 
 I used an AI assistant to help understand the handout, organize the implementation, and review code structure. I ran the submitted code and collected the submitted measurements myself on the declared machine; the assistant did not fabricate timings, hardware facts, plots, or conclusions.
 
+## 11. Reproducibility and Final Validation Checklist
+
+Run the following from the repository root on the declared Linux/WSL2 measurement machine. Use the ISPC 1.31.0 executable selected by the addendum and record only measurements from that machine.
+
+```bash
+ISPC=/path/to/ispc-v1.31.0-linux/bin/ispc
+make -C prog1_mandelbrot_threads clean all
+make -C prog2_vecintrin clean all
+make -C prog3_mandelbrot_ispc clean all ISPC="$ISPC"
+make -C prog4_sqrt clean all ISPC="$ISPC"
+make -C prog5_saxpy clean all ISPC="$ISPC"
+make -C prog6_kmeans clean all
+```
+
+Before packaging, verify the required correctness checks, collect five runs per configuration, save the machine declaration, compute the Program 6 checksum, generate the required plots, and replace every remaining bracketed field in this template. WSL2 smoke-test output is useful for correctness but must not be reported as the final performance measurement unless it is the declared measurement environment.
