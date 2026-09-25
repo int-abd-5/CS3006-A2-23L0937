@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <thread>
+#include <vector>
 
 #include "CycleTimer.h"
 
@@ -62,30 +63,70 @@ double dist(double *x, double *y, int nDim) {
 }
 
 /**
- * Assigns each data point to its "closest" cluster centroid.
+ * Assigns a half-open range of data points to their closest centroids.
+ * Each point is written exactly once, so separate ranges can run concurrently.
  */
-void computeAssignments(WorkerArgs *const args) {
-  double *minDist = new double[args->M];
-  
-  // Initialize arrays
-  for (int m =0; m < args->M; m++) {
-    minDist[m] = 1e30;
-    args->clusterAssignments[m] = -1;
-  }
+static void computeAssignmentRange(WorkerArgs *const args) {
+  for (int m = args->start; m < args->end; m++) {
+    double minDist = 1e30;
+    int bestAssignment = -1;
 
-  // Assign datapoints to closest centroids
-  for (int k = args->start; k < args->end; k++) {
-    for (int m = 0; m < args->M; m++) {
+    for (int k = 0; k < args->K; k++) {
       double d = dist(&args->data[m * args->N],
                       &args->clusterCentroids[k * args->N], args->N);
-      if (d < minDist[m]) {
-        minDist[m] = d;
-        args->clusterAssignments[m] = k;
+      if (d < minDist) {
+        minDist = d;
+        bestAssignment = k;
       }
     }
+
+    args->clusterAssignments[m] = bestAssignment;
+  }
+}
+
+/**
+ * Assigns each data point to its "closest" cluster centroid in parallel.
+ */
+void computeAssignments(WorkerArgs *const args) {
+  const int rangeStart = max(0, args->start);
+  const int rangeEnd = min(args->M, args->end);
+  const int workItems = rangeEnd - rangeStart;
+  if (workItems <= 0) {
+    return;
   }
 
-  delete[] minDist;
+  unsigned int availableWorkers = thread::hardware_concurrency();
+  int workerCount = availableWorkers == 0
+                        ? 1
+                        : min(static_cast<unsigned int>(workItems),
+                              availableWorkers);
+  if (workerCount == 1) {
+    WorkerArgs worker = *args;
+    worker.start = rangeStart;
+    worker.end = rangeEnd;
+    computeAssignmentRange(&worker);
+    return;
+  }
+
+  const int chunkSize = (workItems + workerCount - 1) / workerCount;
+  vector<WorkerArgs> workers(workerCount);
+  vector<thread> threads;
+  threads.reserve(workerCount - 1);
+
+  for (int workerId = 0; workerId < workerCount; workerId++) {
+    workers[workerId] = *args;
+    workers[workerId].start = rangeStart + workerId * chunkSize;
+    workers[workerId].end = min(rangeEnd, workers[workerId].start + chunkSize);
+  }
+
+  // The calling thread performs the first range to avoid an extra worker.
+  for (int workerId = 1; workerId < workerCount; workerId++) {
+    threads.emplace_back(computeAssignmentRange, &workers[workerId]);
+  }
+  computeAssignmentRange(&workers[0]);
+  for (thread &worker : threads) {
+    worker.join();
+  }
 }
 
 /**
@@ -177,6 +218,10 @@ void kMeansThread(double *data, double *clusterCentroids, int *clusterAssignment
   // Used to track convergence
   double *prevCost = new double[K];
   double *currCost = new double[K];
+  double assignmentSeconds = 0.0;
+  double centroidSeconds = 0.0;
+  double costSeconds = 0.0;
+  double totalStartTime = CycleTimer::currentSeconds();
 
   // The WorkerArgs array is used to pass inputs to and return output from
   // functions.
@@ -203,16 +248,33 @@ void kMeansThread(double *data, double *clusterCentroids, int *clusterAssignment
       prevCost[k] = currCost[k];
     }
 
-    // Setup args struct
+    // Setup args struct for the point-range assignment workers.
+    args.start = 0;
+    args.end = M;
+
+    double stageStartTime = CycleTimer::currentSeconds();
+    computeAssignments(&args);
+    assignmentSeconds += CycleTimer::currentSeconds() - stageStartTime;
+
+    stageStartTime = CycleTimer::currentSeconds();
+    computeCentroids(&args);
+    centroidSeconds += CycleTimer::currentSeconds() - stageStartTime;
+
+    // Cost writes one independent slot per cluster, so use a cluster range.
     args.start = 0;
     args.end = K;
-
-    computeAssignments(&args);
-    computeCentroids(&args);
+    stageStartTime = CycleTimer::currentSeconds();
     computeCost(&args);
+    costSeconds += CycleTimer::currentSeconds() - stageStartTime;
 
     iter++;
   }
+
+  double totalSeconds = CycleTimer::currentSeconds() - totalStartTime;
+  printf("[Profile]: iterations=%d assignment=%.3f ms centroid=%.3f ms "
+         "cost=%.3f ms total=%.3f ms\n",
+         iter, assignmentSeconds * 1000, centroidSeconds * 1000,
+         costSeconds * 1000, totalSeconds * 1000);
 
   delete[] currCost;
   delete[] prevCost;
